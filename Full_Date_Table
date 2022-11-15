@@ -1,0 +1,89 @@
+##---------------------------------------------------------------------------------------------------------------------------------------
+# This is a step order list, this is not a code/script.
+# Just listing the steps you would have to manualy do to create a very invasive date table.
+# The '^--' indicates "notes to add to the step once the column is done.
+##---------------------------------------------------------------------------------------------------------------------------------------
+
+#Step 1: Create a New Table:
+  Date = CALENDAR(date(2019,01,01),today()) 
+  OR: Date = CALENDAR(CALCULATE(MIN('DataTable'[logDate]),ALLNOBLANKROW('DataTable')),today()) 
+    ^--"yyyy-mm-dd" Format 
+    ^--Mark as a Date Table. 
+ 
+#Step 2: Add a New Column:
+  Year = YEAR([Date]) 
+ 
+#Step 3: Add A New Column:
+  MonthYear = FORMAT([Date],"mmm-yyyy") 
+    ^--Sort by MonthYearSort created in step 4. 
+    
+#Step 4: Add A New Column: 
+  MonthYearSort = FORMAT([Date],"yyyymm") 
+ 
+#Step 5: Add A New Column: 
+  WeekDay = WEEKDAY([Date],1) 
+    ^--1 = Week starts on Sunday. 
+    ^--2 = Week starts on Monday. 
+ 
+#Step 6: Add A New Column: 
+  WeekOfYear = WEEKNUM([Date],1) 
+    ^--1 = Week starts on Sunday. 
+    ^--2 = Week starts on Monday. 
+    
+#Step 7: Add A New Column:  
+  StartOfWeek = [Date]-[WeekDay]+1 
+ 
+#Step 8: Add A New Column:  
+  EndOfWeek = [StartOfWeek]+6 
+ 
+#Step 9: Add A New Column:  
+  WeekYear = [Year]*100 + [WeekOfYear] 
+ 
+#Step 10: Add A New Column:  
+  WeekRank = RANKX(ALL('Date'),[StartOfWeek],,ASC,Dense) 
+ 
+#Step 11: Add A New Column:  
+  IsToday = SWITCH(TRUE(), [Date]=TODAY(), "TODAY", [Date]=TODAY()-1, "YESTERDAY", FORMAT([Date],"yyyy-mm-dd")) 
+    ^--Shows "Today" if the date is the current date. 
+    ^--Shows "Yesterday" if the date is yesterday. 
+    ^--If the date is neither "TODAY" or "YESTERDAY" then will display the date in the "yyyy-mm-dd" format. 
+    ^--Used for setting the "default" on a slicer to open on the current date. 
+ 
+#Step 12: Add A New Column:  
+  IsWeek = SWITCH(TRUE(), TODAY()>[StartOfWeek] && TODAY()<=[EndOfWeek], "THIS WEEK", 'Date'[WeekYear]&"") 
+    ^--Same as Step 11 notes, to set the "default" for the current week. 
+    ^--'Date'[WeekYear]&"" will display the [WeekYear] but without the &"" it throws an error since this is a text column. 
+ 
+#Step 13: Add A New Column:  
+  IsMonth = SWITCH(TRUE(), EOMONTH(TODAY(),0) = EOMONTH([Date],0),"THIS MONTH",[MonthYear]) 
+    ^--Same as 11/12 to set the "default" for the current month. 
+    ^--",[MonthYear])" end doesn’t need the &"" due to [MonthYear] is already a text column. 
+ 
+#Step 14: Add A New Column:  
+  IsYear = SWITCH(TRUE(), year(TODAY())=year([Date]), "THIS YEAR", [Year]&"") 
+    ^--Same as 11/12/13 to set the "default" for the current Year. 
+    ^--",[Year]&"")" end does need the &"" due to [Year] is NOT a text column. 
+ 
+#Step 15: Add A New Column: 
+  WorkDay = IF(WEEKDAY([Date],2)<6,1,0) 
+    ^--1 = Work day (Mon-Fri) 
+    ^--0 = 0 Weekend (Sat-Sun) 
+ 
+#Step 16: Add A New Column: 
+  WeekDayName = FORMAT([Date],"DDD") 
+    ^--(Mon, Tue, Wen, …) 
+ 
+#Step 17: Add A New Column: 
+  WorkDayOfMonth = IF('Date'[WorkDay]=0, BLANK(), SUMX(FILTER('Date',[MonthYear]=EARLIER('Date'[MonthYear]) && [Date]<=EARLIER([Date])),'Date'[WorkDay])) 
+    ^--Works in conjunction with [WorkDay] displaying only the workdays (Mon-Fri) starting from the 1st of the month (1) (if a weekday and not a weekend). 
+ 
+#Step 18: Add A New Column:
+  WorkDate = IF('Date'[WorkDay]=1,[Date],BLANK()) 
+     ^--Shows the WorkDay Date, and the weekends it shows blank. 
+ 
+#Step 19: Add A New Column:
+  WorkDayRank = IF('Date'[WorkDay]=0, BLANK(), RANKX(ALL('Date'), 'Date'[WorkDate], , ASC, Dense)) 
+     ^--Used to calculate the difference in work days. 
+     ^--Example: 8/1/2022 through 8/31/2022 has 31 days,-
+        - but if I want to calculate 8/1 through 8/12 (2 weeks) for the "WorkDays" -
+          - I would use WorkDayRank instead of DateDiff to get 10 workdays, instead of 14 days. 
